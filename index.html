@@ -185,12 +185,6 @@ body {
     color: var(--green);
 }
 
-#sync-indicator {
-    font-size: 9px;
-    margin-left: 5px;
-    opacity: 0.7;
-}
-
 /* Tabs */
 .tabs {
     display: flex;
@@ -1222,6 +1216,7 @@ select:focus {
         </div>
         <div class="filter-actions">
             <button class="btn gh" style="padding:6px 12px; font-size:10px" onclick="clearFilters()">Clear Filters</button>
+            <button class="btn go" style="padding:6px 12px; font-size:10px" onclick="setAirtableToken()">Set Token</button>
         </div>
     </div>
 
@@ -1316,12 +1311,33 @@ function checkMpin() {
 }
 
 // ============ AIRTABLE SYNC ============
+function getAirtableToken() {
+    return localStorage.getItem('eb_airtable_token') || '';
+}
+
+function setAirtableToken() {
+    const token = prompt('Please enter your Airtable Personal Access Token:');
+    if (token) {
+        localStorage.setItem('eb_airtable_token', token);
+        toast('✓ Token saved');
+        syncWithAirtable();
+    }
+}
+
 async function syncWithAirtable() {
+    const token = getAirtableToken();
     const status = document.getElementById('sync-status');
+    
+    if (!token) {
+        status.textContent = 'SET TOKEN';
+        status.style.color = 'var(--gold)';
+        return;
+    }
+
     status.textContent = 'SYNCING...';
     try {
         const response = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}?sort%5B0%5D%5Bfield%5D=timestamp&sort%5B0%5D%5Bdirection%5D=desc`, {
-            headers: { Authorization: `Bearer patyU7N7Y5rXvH5pY.700147677353119560417757303964995641775730396499564177573` }
+            headers: { Authorization: `Bearer ${token}` }
         });
         
         if (!response.ok) throw new Error('Sync failed');
@@ -1362,11 +1378,14 @@ async function syncWithAirtable() {
 }
 
 async function saveToAirtable(scan) {
+    const token = getAirtableToken();
+    if (!token) return;
+
     try {
         await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}`, {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer patyU7N7Y5rXvH5pY.70014767735311956041775730396499564177573`,
+                'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
@@ -1638,15 +1657,16 @@ function viewScan(id) {
 
 async function delScan(id) {
     if (!confirm('Delete this invoice?')) return;
-    const scan = scans.find(s => s.id === id);
+    const scan = scans.find(s => s.id !== id);
     scans = scans.filter(s => s.id !== id);
     saveLocal();
     renderTable();
-    if (scan && scan.airtableId) {
+    const token = getAirtableToken();
+    if (scan && scan.airtableId && token) {
         try {
             await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}/${scan.airtableId}`, {
                 method: 'DELETE',
-                headers: { Authorization: `Bearer patyU7N7Y5rXvH5pY.700147677353119560417757303964995641775730396499564177573` }
+                headers: { Authorization: `Bearer ${token}` }
             });
         } catch (e) {}
     }
